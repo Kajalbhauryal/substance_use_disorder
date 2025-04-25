@@ -1,0 +1,189 @@
+---
+title: "DA5020.P1
+author: Bhauryal.Kajal Dhansingh
+date: "2023-02-08"
+output: html_document
+---
+#Loading the data
+```{r}
+library(XML)
+library(xml2)
+fileurl <- "https://data.ny.gov/api/views/ngbt-9rwf/rows.xml"
+download.file(fileurl, destfile = "rows.xml")
+nys_df <- xmlToDataFrame("rows.xml")
+head(nys_df)
+```
+
+#Evaluating the dataset to determine what data preparation steps are needed and perform them. 
+```{r}
+
+library(stringr)
+library(skimr)
+library(psych)
+library(janitor)
+library(XML)
+library(xml2)
+library(RCurl)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(lubridate)
+library(scales)
+library(readr)
+
+ 
+
+nys_df <- read.csv("https://data.ny.gov/api/views/ngbt-9rwf/rows.csv")
+nys_df
+
+ dim(nys_df)
+glimpse(nys_df) 
+summary(nys_df)
+
+nys_df <- nys_df %>%
+  rename("County_of_Program_Location" = "County.of.Program.Location",
+         "Service_Type" = "Service.Type",
+         "Program_Category" = "Program.Category",
+         "Age_Group" = "Age.Group",
+         "Primary_Substance_Group" = "Primary.Substance.Group")
+
+describe(nys_df[1:7])
+
+skim(nys_df[1:7])
+
+summary(nys_df[1])
+summary(nys_df[7])
+```
+
+#remove outliers
+```{r, results='hide'}
+nys_df
+Adm <- nys_df$Admissions
+summary(Adm)
+Adm <- nys_df$Admissions
+meann_Adm <- mean(Adm)
+Std.Dev <- sd(Adm)
+z <-(meann_Adm - Adm)/Std.Dev
+z <-abs(z)
+outliers_Adm <-which(z>3)
+Adm[outliers_Adm]
+```
+##Data preparation is an essential step in the data analysis process, as it involves importing,cleaning, transforming, and formatting data so that it can be easily analyzed. dim, glimpse and summary were used to analyse the dataset. Outliers were removed using the z factor.There are 1917 outliers out of a total of 99,367 data points. As approximately ~2% of the data are outliers,which is higher than we would like to see.
+
+#Creating tibbles: county, program_category, primary_substance_group and admissions_data with the appropriate data 
+```{r}
+library(tidyverse)
+library(dplyr)
+
+unique(nys_df$County_of_Program_Location)
+
+##a. County
+county <- tibble(county_code = c("AL","CA","CN","DE","FR","LE","MG","ON","OL","NY","SL","SY","SV","WR","AG","CY","CL","DU","FU","HE","LI","NA","OD","OS","RE","SA","SE","TI","WS","NY","CH","CO","ER","GE","JE","MA","NY","OT","OG","NY","SC","ST","TO","WA","BM","CM","CR","ES","GR","NY","MO","NI","OR","PU","RO","SH","SU","UL","WE","WY","YA"),
+    County_of_Program_Location = c("Albany","Cattaraugus","Chenango","Delaware","Franklin","Lewis","Montgomery","Oneida","Orleans","Queens","Saint Lawrence","Schuyler","Sullivan","Warren","Allegany","Cayuga","Clinton","Dutchess","Fulton","Herkimer","Livingston","Nassau","Onondaga","Oswego","Rensselaer","Saratoga","Seneca","Tioga","Washington","Bronx","Chautauqua","Columbia","Erie","Genesee","Jefferson","Madison","New York","Ontario","Otsego","Richmond","Schenectady","Steuben","Tompkins","Wayne","Broome","Chemung","Cortland","Essex","Greene","Kings","Monroe","Niagara","Orange","Putnam","Rockland","Schoharie","Suffolk","Ulster","Westchester","Wyoming","Yates"))
+county %>% distinct(county_code, .keep_all = TRUE)
+
+unique(nys_df$Program_Category)
+
+program_category <- tibble(program_category_code = c("CR", "IP", "OTP", "RE", "OP", "SP"),
+    Program_Category = c("Crisis", "Inpatient", "Opioid Treatment Program", "Residential", "Outpatient", "Specialized"))
+  program_category %>% distinct(program_category_code, .keep_all = TRUE)
+
+unique(nys_df$Primary_Substance_Group)
+
+##c.Primary_substance_group
+primary_substance_group <- tibble(primary_substance_group_code = c("H", "AO", "OO", "AL", "C", "MJ"), 
+    Primary_Substance_Group = c("Heroin", "All Others", "Other Opioids", "Alcohol", "Cocaine", "Marijuana"))
+primary_substance_group %>% distinct(primary_substance_group_code, .keep_all = TRUE)
+
+##d. admissions_data
+admissions_data <- nys_df %>%
+  left_join(county, by = c("County_of_Program_Location" = "County_of_Program_Location")) %>%
+  left_join(program_category, by = c("Program_Category" = "Program_Category")) %>%
+  left_join(primary_substance_group, by = c("Primary_Substance_Group" = "Primary_Substance_Group")) %>%
+  select(Year, county_code, program_category_code, Service_Type, Age_Group, primary_substance_group_code, Admissions)
+```
+
+#Function called annualAdmissions() that derives the total number of reported admissions that transpired each year, for the entire state of NY and displays the results using a line chart.
+```{r}
+library(ggplot2)
+annualAdmissions <- function() {
+
+admissions_by_year <- nys_df %>%
+    group_by(Year) %>%
+  summarise(total_admissions = sum(Admissions))
+  
+max_year <- admissions_by_year %>% 
+ filter(total_admissions == max(total_admissions)) %>% 
+ pull(Year)
+
+
+ggplot(admissions_by_year, aes(x = Year, y = total_admissions)) +
+    geom_line() +
+    labs(x = "Year", y = "Total Admissions", title = "Highest Number of Admissions for the County") +
+    annotate("text", x = max_year, y = admissions_by_year$total_admissions[admissions_by_year$Year == max_year] + 50000, 
+             label = paste0("Peak Year: ", max_year), hjust = 0) +
+    theme_minimal()
+}
+
+annualAdmissions()
+```
+##Created function annualAdmissions()which prints visualized data sas shown above for a given county with the number of admissions and the year. In NY, the highest number of admissions were seen with the value approx value 3200000.
+
+#Top 5 counties with highest admission rates
+```{r}
+
+library(dplyr)
+library(ggplot2)
+#summarize admissions by county and calculating percentage
+county_percentage <- admissions_data %>%
+  group_by(county_code) %>%
+  summarize(total_admissions = sum(Admissions)) %>%
+  mutate(perc_admissions = total_admissions / sum(total_admissions) * 100)
+
+# Select the top 5 counties
+top_counties <- county_percentage %>%
+  arrange(desc(perc_admissions)) %>%
+  slice(1:5)
+
+# Create a bar chart of the percentage of admissions by county
+ggplot(top_counties, aes(x = reorder(county_code, perc_admissions), y = perc_admissions)) +
+  geom_bar(stat = "identity", fill = "Red") +
+  xlab("County") +
+  ylab("Percentage of Admissions") +
+  ggtitle("Top 5 Counties by Percentage of Admissions")+
+  labs (fill = "county", caption = " Total percentage of admissions for the Top 5 countries")
+
+
+```
+##Top 5 countries with highest admission rates are NY>SU>ER>WE>MO; where NY had the 40% admission rate.
+
+
+
+
+#Top substance by age
+```{r}
+library(stringr)
+library (ggplot2)
+
+#Filter the data and extracting all admissions including "rehab"
+rehab = admissions_data %>%
+  filter(str_detect(nys_df$Service_Type, "Rehab"))
+rehab
+
+#Checking if service type contains only rehab
+rehab$Service.Type %>% unique()
+
+#Which substance is most prominent by age group
+
+rehab %>%
+ group_by(Age_Group, primary_substance_group_code) %>%
+ summarize(total = n()) %>%
+ arrange(desc(total)) %>%
+ ggplot(aes(x = reorder(Age_Group, order(total, decreasing = T)), y = total)) +
+ geom_bar(aes(fill = primary_substance_group_code), stat = "identity", position = "dodge") +
+ labs(title = "Substance count by age group", x = "Age group", y = "Substance Count") +
+ scale_fill_discrete(name = "Substance code", labels = c("AC=Alcohol", "AO=All Others", "CA=Cocaine incl Crack", "H=Heroin", "MA=Marijuana incl Hashish", "OP=Other Opioids")) 
+
+
+```
+## regex function was used and created a dataframe rehab from the above graph which concludes that alchol is the most used substance in all age group except under 18 where marijuana is used predominently.
